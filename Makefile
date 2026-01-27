@@ -1,15 +1,14 @@
 CPP_FILES	:= $(wildcard *.cpp)
 OBJ       	:= $(CPP_FILES:.cpp=.o)
-CXXFLAGS  	:= -std=c++20 -g
+CXXFLAGS  	:= -std=c++23 -g $(shell pkg-config --cflags opencv4)
+LDLIBS 		:= $(shell pkg-config --libs opencv4)
 EXEC	  	:= bwcodec
 
 %.o: %.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(EXEC): $(OBJ)
-	$(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
-
--include $(OBJ:.o=.d)
+	$(CXX) $(LDLIBS) -o $@ $^
 
 .PHONY: run
 run: $(EXEC)
