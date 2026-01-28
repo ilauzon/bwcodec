@@ -18,17 +18,17 @@
 
 namespace fs = std::filesystem;
 
+
+uint64_t getBytesPerFrame(const VideoHeader & video_header) {
+    return std::ceil(static_cast<double>(video_header.width * video_header.height) / 8);
+}
+
 /**
  * Convert the frames of a video contained within a directory to a Video struct.
  */
 Video convertImagesToVideo(const fs::path & frames_directory) {
     std::vector<fs::path> image_paths;
     const std::string extension = ".png";
-
-    if (!fs::exists(frames_directory) || !fs::is_directory(frames_directory)) {
-        constexpr auto message = "{} does not exist or is not a directory.";
-        throw std::invalid_argument(std::format(message, frames_directory.string()));
-    }
 
     for (auto const & entry : fs::directory_iterator(frames_directory)) {
         if (fs::is_regular_file(entry) && entry.path().extension() == extension) {
@@ -53,8 +53,7 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
     printf("Frame height: %d\n", video.header.height);
     printf("Frame width: %d\n", video.header.width);
 
-    const uint64_t elements_per_frame = std::ceil(
-            static_cast<double>(video.header.width * video.header.height) / 8);
+    const auto elements_per_frame = getBytesPerFrame(video.header);
 
     for (auto const & image_path : image_paths) {
         cv::Mat img = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
@@ -88,6 +87,12 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
 
             }
         }
+
+        if (pixel_counter > 0) {
+            pixel_8_group <<= (8 - pixel_counter);
+            frame.pixels.push_back(pixel_8_group);
+        }
+
         video.frames.push_back(frame);
     }
 
@@ -99,7 +104,8 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
  */
 void convertVideoToImages(const Video& video, const fs::path & frames_directory) {
     int image_type = CV_8UC1;
-    cv::Scalar initial_color(128);
+    constexpr uint DEFAULT_COLOR = 64;
+    cv::Scalar initial_color(DEFAULT_COLOR);
     std::vector<cv::Mat> images;
 
     for (int frame_idx = 0; frame_idx < video.header.frame_count; frame_idx++) {
@@ -123,7 +129,7 @@ void convertVideoToImages(const Video& video, const fs::path & frames_directory)
                 image.at<uchar>(row, col) = pixel_is_on ? 255 : 0;
 
                 pixel_counter++;
-                if (pixel_counter > video.header.height * video.header.width) {
+                if (pixel_counter >= video.header.height * video.header.width) {
                     goto endframe;
                 }
             }
@@ -156,15 +162,17 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
     memcpy(&video.header, bytes.data(), sizeof(video.header));
     
     // copy bytes to frames
-    uint num_frames = ((bytes.size() - sizeof(video.header)) / sizeof(Frame));
+    uint num_frames = video.header.frame_count;
     video.frames.resize(num_frames);
 
+    uint64_t bytes_per_frame = getBytesPerFrame(video.header);
+
     for (uint i = 0; i < num_frames; i++) {
-        int byte_index = i * sizeof(Frame) + sizeof(VideoHeader);
+        int byte_index = sizeof(video.header) + i * bytes_per_frame;
         Frame frame = {};
 
         auto begin_iterator = bytes.begin() + byte_index;
-        auto end_iterator = begin_iterator + sizeof(Frame);
+        auto end_iterator = begin_iterator + bytes_per_frame;
 
         frame.pixels.assign(begin_iterator, end_iterator);
         video.frames[i] = frame;
@@ -188,48 +196,75 @@ std::vector<uint8_t> convertVideoToBytes(const Video &video) {
 
     // append frames
     for (auto frame : video.frames) {
-        const uint8_t* frame_pixels_pointer = reinterpret_cast<const uint8_t*>(&frame.pixels);
+        const uint8_t* frame_pixels_pointer = frame.pixels.data();
         bytes.insert(bytes.end(), frame_pixels_pointer, frame_pixels_pointer + frame.pixels.size());
     }
     return bytes;
 }
 
-void decode(fs::path videoFilename, fs::path framesDirectory) 
-{
+void decode(fs::path videoFilename, fs::path framesDirectory) {
     std::ifstream videoFileStream(videoFilename, std::ios::binary);
+
+    if (!videoFileStream) {
+        std::cerr << "Error opening file: " << videoFilename << std::endl;
+        exit(1);
+    }
+
+    const auto bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(videoFileStream), {});
     videoFileStream.close();
-}
 
-void encode(fs::path framesDirectory, fs::path videoFilename) 
-{
-    // std::ofstream videoFileStream(videoFilename, std::ios::binary);
-    // videoFileStream.close();
-    const Video video = convertImagesToVideo(framesDirectory);
+    const auto video = convertBytesToVideo(bytes);
     convertVideoToImages(video, framesDirectory);
-    
 }
 
-int main(int argc, char* argv[]) 
-{
-    if (argc != 4) 
-    {
+void encode(fs::path framesDirectory, fs::path videoFilename) {
+    const Video video = convertImagesToVideo(framesDirectory);
+    const auto videoBytes = convertVideoToBytes(video);
+    std::ofstream videoFileStream(videoFilename, std::ios::binary);
+    if (videoFileStream.is_open()) {
+        videoFileStream.write(reinterpret_cast<const char*>(videoBytes.data()), videoBytes.size());
+        videoFileStream.close();
+    }
+}
+
+int main(int argc, char* argv[]) {
+    if (argc != 4) {
         printf(USAGE_ERR_MSG);
         return EXIT_FAILURE;
     }
 
-    auto modeString = std::string(argv[1]);
+    auto mode_string = std::string(argv[1]);
 
-    auto framesDirectory = std::string(argv[2]);
+    auto frames_directory = std::string(argv[2]);
 
-    auto videoFilename = std::string(argv[3]);
+    auto video_filename = std::string(argv[3]);
 
-    if (modeString == "decode") 
+    if (!fs::is_directory(frames_directory) && fs::exists(frames_directory)) {
+        throw std::invalid_argument(std::format("{} is not a directory.", frames_directory));
+    }
+
+    if (mode_string == "decode") {
+        if (!fs::exists(frames_directory)) {
+            fs::create_directory(frames_directory);
+        }
+
+        if (!fs::exists(video_filename)) {
+            throw std::invalid_argument(std::format("{} does not exist.", video_filename));
+        }
+
+        decode(video_filename, frames_directory);
+
+    } else if (mode_string == "encode") 
     {
-        decode(videoFilename, framesDirectory);
+        if (!fs::exists(frames_directory)) {
+            throw std::invalid_argument(std::format("{} does not exist.", frames_directory));
+        }
 
-    } else if (modeString == "encode") 
-    {
-        encode(framesDirectory, videoFilename);
+        if (fs::exists(video_filename)) {
+            throw std::invalid_argument(std::format("{} already exists, choose another file name.", video_filename));
+        }
+
+        encode(frames_directory, video_filename);
 
     } else 
     {
