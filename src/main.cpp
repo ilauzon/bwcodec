@@ -13,6 +13,8 @@
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "structs.h"
+#include "ProgressBar.h"
+
 
 #define USAGE_ERR_MSG "Usage: bwcodec <encode|decode> <frames_directory> <video_filename>\n"
 
@@ -23,7 +25,7 @@ uint64_t getBytesPerFrame(const VideoHeader & video_header) {
     return std::ceil(static_cast<double>(video_header.width * video_header.height) / 8);
 }
 
-/**
+/*
  * Convert the frames of a video contained within a directory to a Video struct.
  */
 Video convertImagesToVideo(const fs::path & frames_directory) {
@@ -104,7 +106,7 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
  */
 void convertVideoToImages(const Video& video, const fs::path & frames_directory) {
     int image_type = CV_8UC1;
-    constexpr uint DEFAULT_COLOR = 64;
+    constexpr uint8_t DEFAULT_COLOR = 64;
     cv::Scalar initial_color(DEFAULT_COLOR);
     std::vector<cv::Mat> images;
 
@@ -162,12 +164,12 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
     memcpy(&video.header, bytes.data(), sizeof(video.header));
     
     // copy bytes to frames
-    uint num_frames = video.header.frame_count;
+    size_t num_frames = video.header.frame_count;
     video.frames.resize(num_frames);
 
     uint64_t bytes_per_frame = getBytesPerFrame(video.header);
 
-    for (uint i = 0; i < num_frames; i++) {
+    for (size_t i = 0; i < num_frames; i++) {
         int byte_index = sizeof(video.header) + i * bytes_per_frame;
         Frame frame = {};
 
@@ -188,6 +190,8 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
  * @return the vector of bytes.
  */
 std::vector<uint8_t> convertVideoToBytes(const Video &video) {
+    ProgressBar::start();
+
     std::vector<uint8_t> bytes = {};
 
     // append header
@@ -254,8 +258,7 @@ int main(int argc, char* argv[]) {
 
         decode(video_filename, frames_directory);
 
-    } else if (mode_string == "encode") 
-    {
+    } else if (mode_string == "encode") {
         if (!fs::exists(frames_directory)) {
             throw std::invalid_argument(std::format("{} does not exist.", frames_directory));
         }
@@ -266,8 +269,7 @@ int main(int argc, char* argv[]) {
 
         encode(frames_directory, video_filename);
 
-    } else 
-    {
+    } else {
         printf(USAGE_ERR_MSG);
         return EXIT_FAILURE;
     }
