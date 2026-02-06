@@ -1,10 +1,20 @@
 #pragma once
 
+#include <string>
+
 class ProgressBar {
     public:
-        static void start();
-        static void update(int items_processed, int total_item_count);
+        const std::string title;
+        const int total_item_count;
+
+        ProgressBar(std::string title, int total_item_count);
+
+        void update(int items_added);
+
+        void update_increment();
 
     private:
-        static int getShellWidthInChars();
+        int items_processed = 0;
+
+        void draw_progress(); 
 };

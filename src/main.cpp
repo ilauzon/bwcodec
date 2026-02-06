@@ -8,13 +8,13 @@
 #include <format>
 #include <string>
 #include <vector>
+#include <print>
 #include <opencv4/opencv2/opencv.hpp>
 #include "opencv2/core/hal/interface.h"
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "structs.h"
 #include "ProgressBar.h"
-
 
 #define USAGE_ERR_MSG "Usage: bwcodec <encode|decode> <frames_directory> <video_filename>\n"
 
@@ -57,7 +57,10 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
 
     const auto elements_per_frame = getBytesPerFrame(video.header);
 
+    auto progressBar = ProgressBar("Reading images from disk", image_paths.size());
     for (auto const & image_path : image_paths) {
+        progressBar.update_increment();
+
         cv::Mat img = cv::imread(image_path, cv::IMREAD_GRAYSCALE);
 
         if (img.rows != first_frame.rows || img.cols != first_frame.cols) {
@@ -97,6 +100,7 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
 
         video.frames.push_back(frame);
     }
+    std::println(); // finish progress bar
 
     return video;
 }
@@ -110,7 +114,9 @@ void convertVideoToImages(const Video& video, const fs::path & frames_directory)
     cv::Scalar initial_color(DEFAULT_COLOR);
     std::vector<cv::Mat> images;
 
+    auto progressBar = ProgressBar("Writing frames to disk", video.header.frame_count * 2);
     for (int frame_idx = 0; frame_idx < video.header.frame_count; frame_idx++) {
+        progressBar.update_increment();
         cv::Mat image(
                 video.header.height, 
                 video.header.width, 
@@ -142,9 +148,12 @@ void convertVideoToImages(const Video& video, const fs::path & frames_directory)
     }
 
     for (int i = 0; i < images.size(); i++) {
+        progressBar.update_increment();
         const fs::path file_path = frames_directory / std::format("frame{}.png", i);
         cv::imwrite(file_path, images[i]);
     }
+    std::println(); // finish progress bar
+
 }
 
 /**
@@ -169,7 +178,10 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
 
     uint64_t bytes_per_frame = getBytesPerFrame(video.header);
 
+    auto progressBar = ProgressBar("Converting byte representation to video", num_frames);
+
     for (size_t i = 0; i < num_frames; i++) {
+        progressBar.update_increment();
         int byte_index = sizeof(video.header) + i * bytes_per_frame;
         Frame frame = {};
 
@@ -179,6 +191,7 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
         frame.pixels.assign(begin_iterator, end_iterator);
         video.frames[i] = frame;
     }
+    std::println(); // finish progress bar
 
     return video;
 }
@@ -190,8 +203,6 @@ Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
  * @return the vector of bytes.
  */
 std::vector<uint8_t> convertVideoToBytes(const Video &video) {
-    ProgressBar::start();
-
     std::vector<uint8_t> bytes = {};
 
     // append header
@@ -199,10 +210,14 @@ std::vector<uint8_t> convertVideoToBytes(const Video &video) {
     bytes.insert(bytes.end(), header_byte_pointer, header_byte_pointer + sizeof(video.header));
 
     // append frames
-    for (auto frame : video.frames) {
+    auto progressBar = ProgressBar("Converting video to byte representation", video.frames.size());
+    for (auto & frame : video.frames) {
         const uint8_t* frame_pixels_pointer = frame.pixels.data();
         bytes.insert(bytes.end(), frame_pixels_pointer, frame_pixels_pointer + frame.pixels.size());
+        progressBar.update_increment();
     }
+    std::println(); // finish progress bar
+
     return bytes;
 }
 
