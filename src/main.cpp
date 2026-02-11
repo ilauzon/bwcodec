@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <format>
@@ -15,6 +14,7 @@
 #include "opencv2/imgcodecs.hpp"
 #include "structs.h"
 #include "ProgressBar.h"
+#include "VideoCoder.h"
 
 #define USAGE_ERR_MSG "Usage: bwcodec <encode|decode> <frames_directory> <video_filename>\n"
 
@@ -81,7 +81,7 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
             for (int col = 0; col < video.header.width; col++) {
 
                 if (pixel_counter == 8) {
-                    frame.pixels.push_back(pixel_8_group);
+                    frame.pixels.push_back(static_cast<std::byte>(pixel_8_group));
                     pixel_counter = 0;
                 }
 
@@ -95,7 +95,7 @@ Video convertImagesToVideo(const fs::path & frames_directory) {
 
         if (pixel_counter > 0) {
             pixel_8_group <<= (8 - pixel_counter);
-            frame.pixels.push_back(pixel_8_group);
+            frame.pixels.push_back(static_cast<std::byte>(pixel_8_group));
         }
 
         video.frames.push_back(frame);
@@ -126,7 +126,7 @@ void convertVideoToImages(const Video& video, const fs::path & frames_directory)
 
         int pixel_counter = 0;
         for (int pixel_idx = 0; pixel_idx < frame.pixels.size(); pixel_idx++) {
-            uint8_t pixel_8_group = frame.pixels[pixel_idx];
+            uint8_t pixel_8_group = static_cast<uint8_t>(frame.pixels[pixel_idx]);
             
             for (int i = 7; i >= 0; i--) {
                 bool pixel_is_on = (pixel_8_group & ((uint8_t)1 << i)) >> i;
@@ -156,71 +156,6 @@ void convertVideoToImages(const Video& video, const fs::path & frames_directory)
 
 }
 
-/**
- * Convert a vector of bytes to a Video struct.
- * @param bytes the bytes to convert.
- * @return the populated Video struct.
- */
-Video convertBytesToVideo(const std::vector<uint8_t> &bytes) {
-    Video video = {};
-
-    // copy bytes to header
-    if (bytes.size() < sizeof(VideoHeader)) {
-        constexpr auto message = "Video header of length {} bytes is not long enough to be cast to struct of {} bytes.";
-        throw std::length_error(std::format(message, bytes.size(), sizeof(VideoHeader)));
-    }
-    video.header = {};
-    memcpy(&video.header, bytes.data(), sizeof(video.header));
-    
-    // copy bytes to frames
-    size_t num_frames = video.header.frame_count;
-    video.frames.resize(num_frames);
-
-    uint64_t bytes_per_frame = getBytesPerFrame(video.header);
-
-    auto progressBar = ProgressBar("Converting byte representation to video", num_frames);
-
-    for (size_t i = 0; i < num_frames; i++) {
-        progressBar.update_increment();
-        int byte_index = sizeof(video.header) + i * bytes_per_frame;
-        Frame frame = {};
-
-        auto begin_iterator = bytes.begin() + byte_index;
-        auto end_iterator = begin_iterator + bytes_per_frame;
-
-        frame.pixels.assign(begin_iterator, end_iterator);
-        video.frames[i] = frame;
-    }
-    std::println(); // finish progress bar
-
-    return video;
-}
-
-/**
- * Convert a Video struct to a vector of bytes.
- *
- * @param video the Video struct to convert.
- * @return the vector of bytes.
- */
-std::vector<uint8_t> convertVideoToBytes(const Video &video) {
-    std::vector<uint8_t> bytes = {};
-
-    // append header
-    const uint8_t* header_byte_pointer = reinterpret_cast<const uint8_t*>(&video.header);
-    bytes.insert(bytes.end(), header_byte_pointer, header_byte_pointer + sizeof(video.header));
-
-    // append frames
-    auto progressBar = ProgressBar("Converting video to byte representation", video.frames.size());
-    for (auto & frame : video.frames) {
-        const uint8_t* frame_pixels_pointer = frame.pixels.data();
-        bytes.insert(bytes.end(), frame_pixels_pointer, frame_pixels_pointer + frame.pixels.size());
-        progressBar.update_increment();
-    }
-    std::println(); // finish progress bar
-
-    return bytes;
-}
-
 void decode(fs::path videoFilename, fs::path framesDirectory) {
     std::ifstream videoFileStream(videoFilename, std::ios::binary);
 
@@ -229,16 +164,25 @@ void decode(fs::path videoFilename, fs::path framesDirectory) {
         exit(1);
     }
 
-    const auto bytes = std::vector<uint8_t>(std::istreambuf_iterator<char>(videoFileStream), {});
+    std::ifstream ifs(videoFilename, std::ios::binary | std::ios::ate);
+
+    // Get file size
+    auto size = ifs.tellg();
+    std::vector<std::byte> bytes(size);
+
+    // Seek back to the beginning and read directly into the vector
+    ifs.seekg(std::ios::beg);
+    ifs.read(reinterpret_cast<char*>(bytes.data()), size);
+
     videoFileStream.close();
 
-    const auto video = convertBytesToVideo(bytes);
+    const auto video = VideoCoder().decode(bytes);
     convertVideoToImages(video, framesDirectory);
 }
 
 void encode(fs::path framesDirectory, fs::path videoFilename) {
-    const Video video = convertImagesToVideo(framesDirectory);
-    const auto videoBytes = convertVideoToBytes(video);
+    Video video = convertImagesToVideo(framesDirectory);
+    const auto videoBytes = VideoCoder().encode(video);
     std::ofstream videoFileStream(videoFilename, std::ios::binary);
     if (videoFileStream.is_open()) {
         videoFileStream.write(reinterpret_cast<const char*>(videoBytes.data()), videoBytes.size());

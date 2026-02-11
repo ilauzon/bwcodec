@@ -17,7 +17,7 @@ struct VideoHeader {
 }; 
 
 struct Frame {
-    std::vector<uint8_t> pixels; // Grouped into 8 pixels per vector unit.
+    std::vector<std::byte> pixels; // Grouped into 8 pixels per vector unit.
 };
 
 struct Video {
