@@ -18,3 +18,10 @@ target_sources(bwcodec
             ${headers}
 )
 
+file(GLOB modules "*.cppm")
+target_sources(bwcodec PRIVATE 
+    FILE_SET CXX_MODULES 
+    FILES 
+        ${modules}
+)
+
