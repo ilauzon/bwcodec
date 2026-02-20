@@ -1,8 +1,10 @@
 #include "ProgressBar.h"
+#include "fileoperations.hpp"
 #include "opencv2/core/hal/interface.h"
 #include "opencv2/core/mat.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "structs.h"
+#include "videobyteconversions.hpp"
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -11,14 +13,11 @@
 #include <format>
 #include <fstream>
 #include <opencv4/opencv2/opencv.hpp>
-#include <print>
 #include <string>
 #include <vector>
 
 #define USAGE_ERR_MSG                                                          \
     "Usage: bwcodec <encode|decode> <frames_directory> <video_filename>\n"
-
-import VideoByteCoding;
 
 namespace fs = std::filesystem;
 
@@ -102,7 +101,7 @@ Video convertImagesToVideo(const fs::path &frames_directory) {
 
         video.frames.push_back(frame);
     }
-    std::println(); // finish progress bar
+    std::printf("\n"); // finish progress bar
 
     return video;
 }
@@ -156,7 +155,7 @@ void convertVideoToImages(const Video &video,
             frames_directory / std::format("frame{}.png", i);
         cv::imwrite(file_path, images[i]);
     }
-    std::println(); // finish progress bar
+    std::printf("\n"); // finish progress bar
 }
 
 void decode(fs::path videoFilename, fs::path framesDirectory) {
@@ -179,19 +178,14 @@ void decode(fs::path videoFilename, fs::path framesDirectory) {
 
     videoFileStream.close();
 
-    const auto video = VideoByteCoding::toVideo(bytes);
+    const auto video = videobyteconversions::toVideo(bytes);
     convertVideoToImages(video, framesDirectory);
 }
 
 void encode(fs::path framesDirectory, fs::path videoFilename) {
     Video video = convertImagesToVideo(framesDirectory);
-    const auto videoBytes = VideoByteCoding::toBytes(video);
-    std::ofstream videoFileStream(videoFilename, std::ios::binary);
-    if (videoFileStream.is_open()) {
-        videoFileStream.write(reinterpret_cast<const char *>(videoBytes.data()),
-                              videoBytes.size());
-        videoFileStream.close();
-    }
+    const auto videoBytes = videobyteconversions::toBytes(video);
+    fileoperations::writeBytes(videoBytes, videoFilename);
 }
 
 int main(int argc, char *argv[]) {

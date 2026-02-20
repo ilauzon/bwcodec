@@ -1,4 +1,3 @@
-module;
 #include "structs.h"
 #include <cmath>
 #include <cstring>
@@ -6,9 +5,7 @@ module;
 #include <stdexcept>
 #include <vector>
 
-export module VideoByteCoding;
-
-namespace VideoByteCoding {
+namespace videobyteconversions {
 
 namespace {
 int getBytesPerFrame(const VideoHeader &video_header) {
@@ -17,7 +14,7 @@ int getBytesPerFrame(const VideoHeader &video_header) {
 }
 } // namespace
 
-export std::vector<std::byte> toBytes(Video &video) {
+std::vector<std::byte> toBytes(Video &video) {
     std::vector<std::byte> bytes = {};
 
     // append header
@@ -36,7 +33,7 @@ export std::vector<std::byte> toBytes(Video &video) {
     return bytes;
 }
 
-export Video toVideo(std::vector<std::byte> &bytes) {
+Video toVideo(std::vector<std::byte> &bytes) {
     Video video = {};
 
     // copy bytes to header
@@ -68,4 +65,4 @@ export Video toVideo(std::vector<std::byte> &bytes) {
 
     return video;
 }
-} // namespace VideoByteCoding
+} // namespace videobyteconversions

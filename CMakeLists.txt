@@ -5,7 +5,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_COMPILER clang++)
 project(bwcodec)
 
+add_executable(bwcodec)
+
 add_subdirectory(src)
+
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+target_link_libraries(bwcodec ${OpenCV_LIBS})
+
 target_compile_options(bwcodec 
     PRIVATE 
         -g
