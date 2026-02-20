@@ -1,4 +1,4 @@
-#include "ProgressBar.h"
+#include "ProgressBar.hpp"
 #include "fileoperations.hpp"
 #include "opencv2/core/hal/interface.h"
 #include "opencv2/core/mat.hpp"

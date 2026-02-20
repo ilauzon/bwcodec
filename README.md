@@ -8,7 +8,7 @@ Goal: Surpass the compression ratio for H.265 with conventional sprite sheets (n
 Dependencies:
 - CMake >= 3.28
 - OpenCV 4.x.x development headers
-- Ninja
+- Ninja build system
 
 ### Linux
 
@@ -17,7 +17,7 @@ Build the project using the following commands:
 cmake -G Ninja -B build [--fresh]
 cmake --build build
 ```
-The built executable is `build/src/bwcodec`.
+The built executable is `./build/bwcodec`.
 
 ## Benchmarks
 

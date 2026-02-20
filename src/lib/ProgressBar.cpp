@@ -1,4 +1,4 @@
-#include "ProgressBar.h"
+#include "ProgressBar.hpp"
 #include <asm-generic/ioctls.h>
 #include <format>
 #include <iostream>
