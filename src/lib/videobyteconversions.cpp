@@ -8,13 +8,15 @@
 namespace videobyteconversions {
 
 namespace {
+
 int getBytesPerFrame(const VideoHeader &video_header) {
     return std::ceil(
         static_cast<double>(video_header.width * video_header.height) / 8);
 }
+
 } // namespace
 
-std::vector<std::byte> toBytes(Video &video) {
+std::vector<std::byte> toBytes(const Video &video) {
     std::vector<std::byte> bytes = {};
 
     // append header
@@ -26,14 +28,14 @@ std::vector<std::byte> toBytes(Video &video) {
     // append frames
     for (auto &frame : video.frames) {
         const auto frame_pixels_pointer =
-            reinterpret_cast<std::byte *>(frame.pixels.data());
+            reinterpret_cast<const std::byte *>(frame.pixels.data());
         bytes.insert(bytes.end(), frame_pixels_pointer,
                      frame_pixels_pointer + frame.pixels.size());
     }
     return bytes;
 }
 
-Video toVideo(std::vector<std::byte> &bytes) {
+Video toVideo(const std::vector<std::byte> &bytes) {
     Video video = {};
 
     // copy bytes to header

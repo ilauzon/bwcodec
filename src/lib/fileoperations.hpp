@@ -1,17 +1,17 @@
 #include "structs.h"
 #include <filesystem>
 #include <opencv2/core/mat.hpp>
-#include <vector>
+
+namespace fs = std::filesystem;
 
 namespace fileoperations {
 
-std::vector<cv::Mat> readImages(std::filesystem::path imagesDirectory);
+Video encodeVideo(const fs::path &imagesDirectory);
 
-void writeImages();
+void decodeVideo(const Video &video, const fs::path &frames_directory);
 
-Video readVideo(std::filesystem::path videoFilename);
+Video readVideo(const fs::path &videoFilename);
 
-void writeBytes(const std::vector<std::byte> bytes,
-                std::filesystem::path newFilename);
+void writeVideo(const Video &video, const fs::path newFilename);
 
 } // namespace fileoperations

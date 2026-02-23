@@ -3,7 +3,7 @@
 
 namespace videobyteconversions {
 
-std::vector<std::byte> toBytes(Video &video);
-Video toVideo(std::vector<std::byte> &bytes);
+std::vector<std::byte> toBytes(const Video &video);
+Video toVideo(const std::vector<std::byte> &bytes);
 
 } // namespace videobyteconversions
